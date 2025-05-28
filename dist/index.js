@@ -160,10 +160,25 @@ if (require.main === module) {
         }
         else if (args[i] === '--gemini') {
             // Default to Gemini model if --gemini flag is used
-            options.aiModel = 'gemini-2.0-flash';
+            options.aiModel = 'gemini-1.5-flash';
         }
         else if (args[i] === '--non-interactive') {
             options.interactive = false;
+        }
+        else if (args[i] === '--request-delay' && i + 1 < args.length) {
+            options.requestDelay = parseInt(args[++i], 10);
+        }
+        else if (args[i] === '--batch-size' && i + 1 < args.length) {
+            options.batchSize = parseInt(args[++i], 10);
+        }
+        else if (args[i] === '--batch-delay' && i + 1 < args.length) {
+            options.batchDelay = parseInt(args[++i], 10);
+        }
+        else if (args[i] === '--quota-friendly') {
+            // Preset for quota-friendly operation (large delays between requests)
+            options.requestDelay = 5000; // 5 seconds between requests
+            options.batchSize = 3; // Only 3 requests per batch
+            options.batchDelay = 30000; // 30 seconds between batches
         }
     }
     // Run the test generator

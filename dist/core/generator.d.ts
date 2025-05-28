@@ -9,6 +9,9 @@ interface GeneratorOptions {
     includeSnapshot?: boolean;
     timeout?: number;
     interactive?: boolean;
+    requestDelay?: number;
+    batchSize?: number;
+    batchDelay?: number;
 }
 interface GeneratedTest {
     filePath: string;
@@ -25,6 +28,11 @@ declare class Generator {
      * @returns Array of generated test files
      */
     generateTests(analysisResults: AnalysisResult[]): Promise<GeneratedTest[]>;
+    /**
+     * Sleep for a specified duration
+     * @param ms Milliseconds to sleep
+     */
+    private sleep;
     /**
      * Generate a test for a single component
      * @param component The component to generate a test for

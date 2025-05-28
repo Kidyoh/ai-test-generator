@@ -23,6 +23,12 @@ ai-test-generator --model gemini-1.5-pro
 
 # Skip interactive prompting
 ai-test-generator --non-interactive
+
+# Control API rate limiting (for quota management)
+ai-test-generator --request-delay 3000 --batch-size 5 --batch-delay 10000
+
+# Use preset for strict quota management
+ai-test-generator --quota-friendly
 ```
 
 ### Programmatic API
@@ -80,6 +86,9 @@ Or use a configuration file `.ai-test-generator.json`:
 | `verbose` | Show detailed output | `false` |
 | `coverage` | Target code coverage percentage | `80` |
 | `includeSnapshot` | Include snapshot tests | `false` |
+| `requestDelay` | Delay between API requests in ms | `1000` |
+| `batchSize` | Number of components to process before pausing | `5` |
+| `batchDelay` | Delay between batches in ms | `5000` |
 
 ## How It Works
 

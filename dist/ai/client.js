@@ -58,7 +58,7 @@ class AIClient {
             throw new Error('API key is required. Set it via options, GEMINI_API_KEY environment variable, or in the config file.');
         }
         // Set default options with overrides
-        this.model = options.model || 'gemini-1.5-pro';
+        this.model = options.model || 'gemini-1.5-flash';
         this.timeout = options.timeout || 30000;
         this.maxRetries = options.maxRetries || 3;
         // Initialize with dummy values first - will be properly initialized later

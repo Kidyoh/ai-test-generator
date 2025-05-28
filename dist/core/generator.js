@@ -63,22 +63,51 @@ class Generator {
      */
     async generateTests(analysisResults) {
         const generatedTests = [];
+        // Default values for rate limiting
+        const requestDelay = this.options.requestDelay || 1000; // 1 second between requests
+        const batchSize = this.options.batchSize || 5; // Process 5 components before pausing
+        const batchDelay = this.options.batchDelay || 5000; // 5 second pause between batches
+        // Collect all components that need tests across all files
+        let allComponentsToTest = [];
         for (const result of analysisResults) {
             // Filter components that need tests
             const componentsToTest = result.components.filter(component => component.needsTest);
-            for (const component of componentsToTest) {
-                try {
-                    const test = await this.generateTestForComponent(component, result.filePath);
-                    if (test) {
-                        generatedTests.push(test);
-                    }
+            allComponentsToTest = allComponentsToTest.concat(componentsToTest.map(component => ({ component, filePath: result.filePath })));
+        }
+        // Process components with rate limiting
+        for (let i = 0; i < allComponentsToTest.length; i++) {
+            const { component, filePath } = allComponentsToTest[i];
+            try {
+                console.log(`Generating test for component ${i + 1}/${allComponentsToTest.length}: ${component.name}`);
+                const test = await this.generateTestForComponent(component, filePath);
+                if (test) {
+                    generatedTests.push(test);
                 }
-                catch (error) {
-                    console.error(`Error generating test for ${component.name}:`, error);
+                // Apply request delay between API calls
+                if (i < allComponentsToTest.length - 1) {
+                    console.log(`Waiting ${requestDelay}ms before next request...`);
+                    await this.sleep(requestDelay);
                 }
+                // Apply batch delay after processing batchSize components
+                if ((i + 1) % batchSize === 0 && i < allComponentsToTest.length - 1) {
+                    console.log(`Completed batch of ${batchSize}. Pausing for ${batchDelay}ms...`);
+                    await this.sleep(batchDelay);
+                }
+            }
+            catch (error) {
+                console.error(`Error generating test for ${component.name}:`, error);
+                // Add extra delay after an error to avoid rate limit issues
+                await this.sleep(requestDelay * 2);
             }
         }
         return generatedTests;
+    }
+    /**
+     * Sleep for a specified duration
+     * @param ms Milliseconds to sleep
+     */
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
     /**
      * Generate a test for a single component
