@@ -1,6 +1,6 @@
 {
   "name": "ai-test-generator",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "description": "AI-powered test generator for JavaScript and TypeScript codebases using Google Gemini",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -27,8 +27,13 @@ ai-test-generator --non-interactive
 # Control API rate limiting (for quota management)
 ai-test-generator --request-delay 3000 --batch-size 5 --batch-delay 10000
 
-# Use preset for strict quota management
-ai-test-generator --quota-friendly
+
+# Quota-friendly modes - for when you're hitting API limits
+ai-test-generator --quota-friendly --file ./src/utils/helpers.js
+ai-test-generator --ultra-quota-friendly --file ./src/utils/helpers.js
+
+# Offline mode - generates templates without API calls
+ai-test-generator --offline --file ./src/utils/helpers.js
 ```
 
 ### Programmatic API
@@ -145,7 +150,7 @@ MIT
 
 ---
 
-Created with ❤️ by KidusJavaScript and TypeScript codebases using Google's Gemini AI.
+Created with ❤️ by Kidus
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
