@@ -48,6 +48,8 @@ class AIClient {
     constructor(options = {}) {
         // Enable interactive mode by default
         this.interactive = options.interactive ?? true;
+        // Strict quota mode is disabled by default
+        this.strictQuotaMode = options.strictQuotaMode ?? false;
         // Try to load API key from various sources
         this.apiKey = options.apiKey || process.env.GEMINI_API_KEY || this.loadApiKeyFromConfig();
         // If no API key and interactive mode is enabled, prompt the user
@@ -58,9 +60,9 @@ class AIClient {
             throw new Error('API key is required. Set it via options, GEMINI_API_KEY environment variable, or in the config file.');
         }
         // Set default options with overrides
-        this.model = options.model || 'gemini-1.5-flash';
-        this.timeout = options.timeout || 30000;
-        this.maxRetries = options.maxRetries || 3;
+        this.model = options.model || 'gemini-1.5-flash'; // Using the less resource-intensive model by default
+        this.timeout = options.timeout || 60000; // Increased timeout for quota issues
+        this.maxRetries = options.maxRetries || 5; // Increased retries for quota issues
         // Initialize with dummy values first - will be properly initialized later
         this.genAI = new generative_ai_1.GoogleGenerativeAI("dummy-key");
         this.generativeModel = this.genAI.getGenerativeModel({ model: this.model });
@@ -68,6 +70,8 @@ class AIClient {
         if (this.apiKey !== 'pending-input') {
             this.initializeClient();
         }
+        // Set offline mode if specified
+        this.offlineMode = options.offlineMode ?? false;
     }
     /**
      * Initialize the Gemini client
@@ -129,6 +133,11 @@ class AIClient {
      * @returns The AI's response
      */
     async complete(prompt) {
+        // Check for offline mode first
+        if (this.offlineMode) {
+            console.log('📴 Running in offline mode - generating simple test template without API call');
+            return this.generateOfflineTemplate(prompt);
+        }
         // If API key is pending input, prompt for it first
         if (this.apiKey === 'pending-input') {
             const apiKey = await this.promptForApiKey();
@@ -155,17 +164,41 @@ class AIClient {
         // Now proceed with the API call
         let attempts = 0;
         let lastError = null;
+        // MUCH more conservative delays
+        let baseDelay = this.strictQuotaMode ? 30000 : 2000; // 30 seconds base delay in strict mode
         while (attempts < this.maxRetries) {
             try {
+                // In strict quota mode, enforce a mandatory wait before EVERY request
+                if (this.strictQuotaMode) {
+                    const waitTime = 30000 + Math.random() * 15000; // 30-45 second wait
+                    console.log(`🐢 Ultra-strict quota mode - waiting ${Math.round(waitTime / 1000)} seconds before request...`);
+                    await this.sleep(waitTime);
+                }
                 return await this.sendRequest(prompt);
             }
             catch (error) {
-                lastError = error;
+                const err = error;
+                lastError = err;
                 attempts++;
-                // Wait a bit longer between retries
-                const delay = Math.pow(2, attempts) * 1000;
-                console.warn(`AI request failed, retrying in ${delay}ms (attempt ${attempts}/${this.maxRetries})`);
-                await this.sleep(delay);
+                // Check if it's a quota-related error
+                const isQuota = err.message.includes('quota') ||
+                    err.message.includes('429') ||
+                    err.message.includes('Too Many Requests');
+                if (isQuota) {
+                    // For quota errors, extract retry delay if available from the error message
+                    const retryMatch = err.message.match(/retryDelay:"(\d+)s"/);
+                    const suggestedDelay = retryMatch ? parseInt(retryMatch[1]) * 1000 : null;
+                    // Use the suggested delay plus extra buffer, or a very long delay
+                    const quotaDelay = (suggestedDelay || 60000) + 15000 + Math.random() * 30000;
+                    console.warn(`⚠️ Quota limit hit. Waiting ${Math.round(quotaDelay / 1000)} seconds before retry...`);
+                    await this.sleep(quotaDelay);
+                }
+                else {
+                    // Regular exponential backoff for other errors
+                    const delay = baseDelay * Math.pow(2, attempts);
+                    console.warn(`AI request failed, retrying in ${Math.round(delay / 1000)}s (attempt ${attempts}/${this.maxRetries})`);
+                    await this.sleep(delay);
+                }
             }
         }
         throw new Error(`Failed to get response from AI after ${this.maxRetries} attempts: ${lastError?.message}`);
@@ -176,20 +209,28 @@ class AIClient {
      * @returns The AI's response text
      */
     async sendRequest(prompt) {
+        // Create system prompt for test generation
+        const systemPrompt = 'You are a helpful assistant that specializes in writing test code. Generate high quality unit tests with proper mocking and test coverage.';
         try {
-            // Create system prompt for test generation
-            const systemPrompt = 'You are a helpful assistant that specializes in writing test code. Generate high quality unit tests with proper mocking and test coverage.';
-            // Use Gemini's generation API
+            let finalPrompt = prompt;
+            // In strict quota mode, trim the prompt significantly to reduce token usage
+            if (this.strictQuotaMode && prompt.length > 2000) {
+                finalPrompt = prompt.substring(0, 600) +
+                    '\n\n[Content trimmed to reduce token usage]\n\n' +
+                    prompt.substring(prompt.length - 600);
+                console.log(`🔍 Using ultra-reduced prompt size (${finalPrompt.length} chars) to stay within quota limits`);
+            }
+            // Use much more conservative settings in strict mode
             const result = await this.generativeModel.generateContent({
                 contents: [{
                         role: 'user',
-                        parts: [{ text: `${systemPrompt}\n\n${prompt}` }]
+                        parts: [{ text: `${systemPrompt}\n\n${finalPrompt}` }]
                     }],
                 generationConfig: {
-                    temperature: 0.2,
-                    topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 8192,
+                    temperature: 0.1,
+                    topK: 20,
+                    topP: 0.8,
+                    maxOutputTokens: this.strictQuotaMode ? 1024 : 4096, // Much smaller in strict mode
                 },
             });
             // Extract response text
@@ -258,6 +299,66 @@ class AIClient {
         this.genAI = new generative_ai_1.GoogleGenerativeAI(this.apiKey);
         this.generativeModel = this.genAI.getGenerativeModel({ model: this.model });
         return this;
+    }
+    /**
+     * Enable or disable strict quota mode
+     * @param enabled Whether strict quota mode should be enabled
+     * @returns This client instance for chaining
+     */
+    setStrictQuotaMode(enabled) {
+        this.strictQuotaMode = enabled;
+        return this;
+    }
+    /**
+     * Enable or disable offline mode
+     * @param enabled Whether offline mode should be enabled
+     * @returns This client instance for chaining
+     */
+    setOfflineMode(enabled) {
+        this.offlineMode = enabled;
+        return this;
+    }
+    /**
+     * Generate a test template in offline mode
+     * @param prompt The prompt containing the component code
+     * @returns A string with the test template
+     */
+    generateOfflineTemplate(prompt) {
+        // Extract component name from prompt
+        const nameMatch = prompt.match(/Here's the component to test:\\s*```(?:javascript|typescript)\\s*.*?(?:function|class|const)\\s+([a-zA-Z0-9_]+)/s);
+        const componentName = nameMatch ? nameMatch[1] : 'UnknownComponent';
+        // Check if it's likely a class
+        const isClass = prompt.includes('class ');
+        if (isClass) {
+            return `import { ${componentName} } from './path-to-module';
+
+describe('${componentName}', () => {
+  let instance;
+
+  beforeEach(() => {
+    instance = new ${componentName}();
+  });
+
+  test('should be defined', () => {
+    expect(instance).toBeDefined();
+  });
+
+  // Add more tests here based on the component's methods
+  // This is a placeholder generated in offline mode
+});`;
+        }
+        else {
+            return `import { ${componentName} } from './path-to-module';
+
+describe('${componentName}', () => {
+  test('should be defined', () => {
+    expect(${componentName}).toBeDefined();
+  });
+
+  // Add more tests here based on the function's behavior
+  // This is a placeholder generated in offline mode
+});`;
+        }
     }
 }
 exports.AIClient = AIClient;

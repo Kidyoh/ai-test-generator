@@ -13,6 +13,8 @@ interface TestGeneratorOptions extends GeneratorOptions {
   dryRun?: boolean;
   verbose?: boolean;
   singleFile?: string;
+  strictQuotaMode?: boolean;
+  offlineMode?: boolean;
 }
 
 class AITestGenerator {
@@ -193,6 +195,14 @@ if (require.main === module) {
       options.requestDelay = 5000; // 5 seconds between requests
       options.batchSize = 3;       // Only 3 requests per batch
       options.batchDelay = 30000;  // 30 seconds between batches
+    } else if (args[i] === '--ultra-quota-friendly') {
+      options.strictQuotaMode = true;
+      options.requestDelay = 45000; // 45 seconds between requests
+      options.aiModel = 'gemini-1.5-flash'; // Use the smaller model
+      console.log('📢 Ultra-quota-friendly mode enabled. This will be very slow but should avoid quota errors.');
+    } else if (args[i] === '--offline') {
+      options.offlineMode = true;
+      console.log('📴 Offline mode enabled. Simple test templates will be generated without API calls.');
     }
   }
   

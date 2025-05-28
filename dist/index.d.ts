@@ -10,6 +10,8 @@ interface TestGeneratorOptions extends GeneratorOptions {
     dryRun?: boolean;
     verbose?: boolean;
     singleFile?: string;
+    strictQuotaMode?: boolean;
+    offlineMode?: boolean;
 }
 declare class AITestGenerator {
     private analyzer;
